@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MindFlow — 마인드맵 + 할 일</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -29,7 +29,8 @@
   --sh-lg: 0 8px 32px rgba(0,0,0,0.1);
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden;height:100vh;width:100vw}
+body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden;height:100vh;width:100vw;
+  -webkit-user-select:none;user-select:none;touch-action:none}
 
 #canvas{position:absolute;top:0;left:0;width:100%;height:100%;cursor:grab;
   background-image:radial-gradient(circle,var(--border) .8px,transparent .8px);background-size:28px 28px}
@@ -38,22 +39,26 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hid
 svg#lines{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}
 svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linecap:round}
 
-.node{position:absolute;z-index:10;min-width:90px;max-width:280px;cursor:pointer;user-select:none}
+.node{position:absolute;z-index:10;min-width:70px;max-width:260px;cursor:pointer;
+  -webkit-user-select:none;user-select:none;touch-action:none}
 .node-inner{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
-  padding:9px 14px;display:flex;align-items:center;gap:8px;position:relative;
+  padding:9px 13px;display:flex;align-items:center;gap:7px;position:relative;
   transition:border-color .15s,box-shadow .15s;box-shadow:var(--sh-sm)}
 .node:hover .node-inner{border-color:var(--accent);box-shadow:var(--sh-md)}
 
-.node.root .node-inner{background:var(--accent);border-color:var(--accent);padding:12px 20px;box-shadow:0 3px 12px rgba(74,108,247,.25)}
+.node.root .node-inner{background:var(--accent);border-color:var(--accent);padding:12px 18px;
+  box-shadow:0 3px 12px rgba(74,108,247,.25)}
 .node.root .node-label{color:#fff;font-weight:700;font-size:15px}
 
 .node.todo .node-inner{background:var(--accent3-light);border-color:var(--accent3-border)}
 .node.todo.done .node-inner{opacity:.45}
 .node.todo.done .node-label{text-decoration:line-through;color:var(--text-dim)}
-
 .node.selected .node-inner{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow),var(--sh-md)}
+.node.drop-target .node-inner{border-color:var(--accent)!important;
+  box-shadow:0 0 0 3px var(--accent-glow),var(--sh-md)!important;background:var(--accent-light)!important}
 
-.node-label{font-size:13px;font-weight:400;color:var(--text);outline:none;min-width:30px;word-break:break-word;line-height:1.4}
+.node-label{font-size:13px;font-weight:400;color:var(--text);outline:none;min-width:20px;
+  word-break:break-word;line-height:1.4;-webkit-user-select:text;user-select:text}
 
 .todo-check{width:17px;height:17px;min-width:17px;border-radius:4px;border:2px solid var(--accent3);
   display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s;flex-shrink:0}
@@ -63,12 +68,13 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 
 .collapse-btn{width:20px;height:20px;min-width:20px;border-radius:50%;border:1.5px solid var(--border);
   background:var(--surface2);color:var(--text-dim);display:flex;align-items:center;justify-content:center;
-  cursor:pointer;font-size:11px;font-weight:700;transition:all .15s;flex-shrink:0;margin-left:2px}
+  cursor:pointer;font-size:10px;font-weight:700;transition:all .15s;flex-shrink:0}
 .collapse-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
 .collapse-btn .arrow{display:inline-block;transition:transform .2s}
 .collapse-btn .arrow.collapsed{transform:rotate(-90deg)}
 
-.node-actions{position:absolute;right:-8px;top:50%;transform:translateY(-50%) translateX(100%);display:none;gap:3px;z-index:20}
+.node-actions{position:absolute;right:-8px;top:50%;transform:translateY(-50%) translateX(100%);
+  display:none;gap:3px;z-index:20}
 .node:hover .node-actions,.node.selected .node-actions{display:flex}
 .node-action-btn{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface);
   color:var(--text-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;
@@ -80,15 +86,11 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
   font-size:9px;font-weight:700;font-family:var(--mono);width:18px;height:18px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;box-shadow:var(--sh-sm);z-index:15}
 
-.node.drop-target .node-inner{border-color:var(--accent)!important;
-  box-shadow:0 0 0 3px var(--accent-glow),var(--sh-md)!important;
-  background:var(--accent-light)!important}
-
 #toolbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:1px;
   background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px;box-shadow:var(--sh-lg)}
-.tb-btn{padding:7px 13px;background:none;border:none;color:var(--text-dim);font-family:var(--font);
+.tb-btn{padding:7px 12px;background:none;border:none;color:var(--text-dim);font-family:var(--font);
   font-size:12px;font-weight:500;cursor:pointer;border-radius:7px;transition:all .15s;
-  display:flex;align-items:center;gap:5px;white-space:nowrap}
+  display:flex;align-items:center;gap:4px;white-space:nowrap}
 .tb-btn:hover{background:var(--surface2);color:var(--text)}
 .tb-btn svg{width:15px;height:15px}
 .tb-sep{width:1px;background:var(--border);margin:4px 1px}
@@ -103,10 +105,19 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 .panel-close{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;padding:4px;border-radius:4px}
 .panel-close:hover{color:var(--text)}
 .todo-list{flex:1;overflow-y:auto;padding:10px}
-.todo-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;transition:background .12s;margin-bottom:1px}
+
+.todo-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;
+  cursor:grab;transition:background .12s,transform .15s,box-shadow .15s;margin-bottom:2px;
+  position:relative;touch-action:none}
 .todo-item:hover{background:var(--surface2)}
+.todo-item.dragging{opacity:.85;box-shadow:var(--sh-md);background:var(--surface);z-index:10;transform:scale(1.02)}
+.todo-item .drag-handle{color:var(--border-strong);font-size:14px;cursor:grab;flex-shrink:0;
+  display:flex;align-items:center;padding:0 2px;touch-action:none}
 .todo-item .path{font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:2px}
 .todo-item-label{font-size:13px;line-height:1.3}
+.todo-drop-indicator{height:2px;background:var(--accent);border-radius:1px;margin:0 12px;
+  transition:opacity .15s;opacity:0;pointer-events:none}
+.todo-drop-indicator.visible{opacity:1}
 .todo-empty{padding:40px 20px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.7}
 
 .ctx-menu{position:fixed;z-index:200;background:var(--surface);border:1px solid var(--border);
@@ -127,19 +138,27 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 .help-hint kbd{background:var(--surface);border:1px solid var(--border);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px}
 #file-input{display:none}
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+@media(max-width:768px){
+  .node-actions{display:none!important}
+  .help-hint{display:none}
+  #toolbar{padding:2px;gap:0}
+  .tb-btn{padding:6px 8px;font-size:11px;gap:3px}
+  .tb-btn svg{width:13px;height:13px}
+}
 </style>
 </head>
 <body>
 <div id="canvas"><svg id="lines"></svg></div>
 
 <div id="toolbar">
-  <button class="tb-btn" onclick="addChild()" title="자식 노드 추가 (Tab)">
+  <button class="tb-btn" onclick="addChild()" title="Tab">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>추가
   </button><div class="tb-sep"></div>
-  <button class="tb-btn" onclick="toggleTodoSel()" title="할 일 토글 (T)">
+  <button class="tb-btn" onclick="toggleTodoSel()" title="T">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 12l2 2 4-4"/></svg>할 일
   </button><div class="tb-sep"></div>
-  <button class="tb-btn" onclick="toggleCollapseSel()" title="접기/펼치기 (C)">
+  <button class="tb-btn" onclick="toggleCollapseSel()" title="C">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>접기
   </button><div class="tb-sep"></div>
   <button class="tb-btn" onclick="togglePanel()">
@@ -178,34 +197,110 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 <div class="help-hint"><kbd>Tab</kbd> 자식 추가 &nbsp; <kbd>Enter</kbd> 형제 추가 &nbsp; <kbd>T</kbd> 할 일 &nbsp; <kbd>C</kbd> 접기 &nbsp; <kbd>Del</kbd> 삭제 &nbsp; <kbd>F2</kbd> 수정</div>
 
 <script>
-let nodes={},selId=null,panelOpen=false,isEditing=false;
+// ── State ──
+let nodes={},todoOrder=[],selId=null,panelOpen=false,isEditing=false;
 let panX=0,panY=0,isPanning=false,panSt={x:0,y:0};
-let isDrag=false,dragId=null,dragOff={x:0,y:0};
-let dragMoved=false,dropTargetId=null;
-const cvs=document.getElementById('canvas'),svg=document.getElementById('lines'),ctx=document.getElementById('ctx-menu');
+let isDrag=false,dragId=null,dragOff={x:0,y:0},dragMoved=false,dropTargetId=null;
+let lastTap=0,lastTapId=null;
 
+const cvs=document.getElementById('canvas'),svg=document.getElementById('lines'),ctx=document.getElementById('ctx-menu');
 const gid=()=>'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+// ── Init ──
 function init(){
   const s=localStorage.getItem('mindflow-data');
   if(s){try{const d=JSON.parse(s);nodes=d.nodes||{};panX=d.panX||0;panY=d.panY||0;
+    todoOrder=d.todoOrder||[];
     Object.values(nodes).forEach(n=>{if(n.collapsed===undefined)n.collapsed=false});
   }catch(e){mkDefault()}}else mkDefault();
+  syncTodoOrder();
   renderAll();
 }
-
 function mkDefault(){
   const id=gid();
-  nodes={[id]:{id,label:'마인드맵',x:window.innerWidth/2-60,y:window.innerHeight/2-20,
-    parent:null,children:[],isTodo:false,done:false,isRoot:true,collapsed:false}};
-  panX=0;panY=0;
+  nodes={[id]:{id,label:'마인드맵',x:0,y:0,parent:null,children:[],
+    isTodo:false,done:false,isRoot:true,collapsed:false}};
+  panX=window.innerWidth/2;panY=window.innerHeight/2;todoOrder=[];
+}
+function save(){localStorage.setItem('mindflow-data',JSON.stringify({nodes,panX,panY,todoOrder}))}
+
+function syncTodoOrder(){
+  const active=new Set(Object.values(nodes).filter(n=>n.isTodo&&!n.done).map(n=>n.id));
+  todoOrder=todoOrder.filter(id=>active.has(id));
+  active.forEach(id=>{if(!todoOrder.includes(id))todoOrder.push(id)});
 }
 
-function save(){localStorage.setItem('mindflow-data',JSON.stringify({nodes,panX,panY}))}
-
+// ── Visibility ──
 function isVis(id){let c=nodes[id];while(c&&c.parent){const p=nodes[c.parent];if(!p||p.collapsed)return false;c=p}return true}
 
+// ── Hybrid Layout: Radial L1 + Horizontal Tree L2+ ──
+const BRANCH_R=180,H_GAP=170,V_GAP=14,NODE_H=42;
+
+function subtreeH(id){
+  const n=nodes[id];if(!n)return NODE_H;
+  const ch=n.collapsed?[]:n.children.filter(c=>nodes[c]);
+  if(!ch.length)return NODE_H;
+  let t=0;ch.forEach((c,i)=>{t+=subtreeH(c);if(i<ch.length-1)t+=V_GAP});
+  return Math.max(NODE_H,t);
+}
+
+// Layout a branch: children extend in direction dir, centered on parent's y
+function layoutBranch(id,dir){
+  const n=nodes[id];if(!n)return;
+  const ch=n.collapsed?[]:n.children.filter(c=>nodes[c]);
+  if(!ch.length)return;
+
+  let totalH=0;
+  ch.forEach((c,i)=>{totalH+=subtreeH(c);if(i<ch.length-1)totalH+=V_GAP});
+
+  const childX=n.x+dir*H_GAP;
+  let childY=n.y+NODE_H/2-totalH/2;
+
+  ch.forEach(cid=>{
+    const h=subtreeH(cid);
+    const cn=nodes[cid];
+    cn.x=childX;
+    cn.y=childY+h/2-NODE_H/2;
+    layoutBranch(cid,dir);
+    childY+=h+V_GAP;
+  });
+}
+
+function autoLayout(){
+  const root=Object.values(nodes).find(n=>n.isRoot);
+  if(!root)return;
+  root.x=0;root.y=0;
+
+  const L1=root.collapsed?[]:root.children.filter(c=>nodes[c]);
+  if(!L1.length)return;
+
+  const count=L1.length;
+
+  L1.forEach((cid,i)=>{
+    // Distribute evenly, starting from top-right going clockwise
+    const angle=-Math.PI/2+(i/count)*2*Math.PI;
+    const cn=nodes[cid];
+
+    // Direction: right side or left side
+    const dir=Math.cos(angle)>=0?1:-1;
+
+    // Calculate subtree height for this branch to offset radial position
+    const branchH=subtreeH(cid);
+
+    // Place first-level child at radial position
+    cn.x=BRANCH_R*Math.cos(angle);
+    cn.y=BRANCH_R*Math.sin(angle);
+
+    // Layout its sub-children as horizontal tree
+    layoutBranch(cid,dir);
+  });
+
+  panX=window.innerWidth/2;
+  panY=window.innerHeight/2;
+}
+
+// ── Render ──
 function renderAll(){
   cvs.querySelectorAll('.node').forEach(e=>e.remove());
   Object.values(nodes).forEach(n=>{if(isVis(n.id))renderNode(n)});
@@ -219,28 +314,52 @@ function renderNode(n){
   el.style.left=(n.x+panX)+'px';el.style.top=(n.y+panY)+'px';
 
   let h='<div class="node-inner">';
-  if(n.isTodo)h+=`<div class="todo-check ${n.done?'checked':''}" onclick="event.stopPropagation();togDone('${n.id}')"></div>`;
+  if(n.isTodo)h+=`<div class="todo-check ${n.done?'checked':''}" data-action="check" data-nid="${n.id}"></div>`;
   h+=`<div class="node-label" data-id="${n.id}">${esc(n.label)}</div>`;
-  if(n.children.length>0)h+=`<div class="collapse-btn" onclick="event.stopPropagation();togColl('${n.id}')" title="접기/펼치기"><span class="arrow ${n.collapsed?'collapsed':''}">▾</span></div>`;
-  h+=`<div class="node-actions"><button class="node-action-btn" onclick="event.stopPropagation();addChildTo('${n.id}')" title="자식 추가">+</button>`;
-  if(!n.isRoot)h+=`<button class="node-action-btn danger" onclick="event.stopPropagation();delNode('${n.id}')" title="삭제">×</button>`;
+  if(n.children.length>0)h+=`<div class="collapse-btn" data-action="collapse" data-nid="${n.id}"><span class="arrow ${n.collapsed?'collapsed':''}">▾</span></div>`;
+  h+=`<div class="node-actions"><button class="node-action-btn" data-action="add" data-nid="${n.id}">+</button>`;
+  if(!n.isRoot)h+=`<button class="node-action-btn danger" data-action="del" data-nid="${n.id}">×</button>`;
   h+='</div>';
   if(n.collapsed&&n.children.length>0)h+=`<div class="children-count">${cntDesc(n.id)}</div>`;
   h+='</div>';
   el.innerHTML=h;
 
-  el.addEventListener('mousedown',e=>{
-    if(e.target.closest('.node-action-btn,.todo-check,.collapse-btn'))return;
-    e.stopPropagation();sel(n.id);isDrag=true;dragId=n.id;dragMoved=false;
-    dragOff.x=e.clientX-(n.x+panX);dragOff.y=e.clientY-(n.y+panY);
+  // Click delegation
+  el.addEventListener('click',e=>{
+    const act=e.target.closest('[data-action]');
+    if(!act)return;
+    e.stopPropagation();
+    const a=act.dataset.action,nid=act.dataset.nid;
+    if(a==='check')togDone(nid);
+    else if(a==='collapse')togColl(nid);
+    else if(a==='add')addChildTo(nid);
+    else if(a==='del')delNode(nid);
   });
-  el.addEventListener('dblclick',e=>{e.stopPropagation();editNode(n.id)});
+
+  // Pointer events for drag + double-tap
+  el.addEventListener('pointerdown',e=>{
+    if(e.target.closest('[data-action]'))return;
+    e.stopPropagation();e.preventDefault();
+    sel(n.id);
+
+    // Double-tap detection
+    const now=Date.now();
+    if(lastTapId===n.id&&now-lastTap<400){editNode(n.id);lastTap=0;lastTapId=null;return;}
+    lastTap=now;lastTapId=n.id;
+
+    isDrag=true;dragId=n.id;dragMoved=false;
+    const rect=el.getBoundingClientRect();
+    dragOff.x=e.clientX-rect.left;dragOff.y=e.clientY-rect.top;
+    el.setPointerCapture(e.pointerId);
+  });
+
   el.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();sel(n.id);showCtx(e.clientX,e.clientY)});
   cvs.appendChild(el);
 }
 
 function cntDesc(id){const n=nodes[id];if(!n)return 0;let c=n.children.length;n.children.forEach(ch=>c+=cntDesc(ch));return c}
 
+// ── Lines (smooth bezier) ──
 function drawLines(){
   svg.innerHTML='';
   Object.values(nodes).forEach(n=>{
@@ -249,91 +368,42 @@ function drawLines(){
     const pE=document.getElementById('node-'+p.id),cE=document.getElementById('node-'+n.id);
     if(!pE||!cE)return;
     const pR=pE.getBoundingClientRect(),cR=cE.getBoundingClientRect();
-    const x1=pR.left+pR.width/2,y1=pR.top+pR.height/2,x2=cR.left+cR.width/2,y2=cR.top+cR.height/2;
-    const mx=(x1+x2)/2;
+    const x1=pR.left+pR.width/2,y1=pR.top+pR.height/2;
+    const x2=cR.left+cR.width/2,y2=cR.top+cR.height/2;
+    const dx=x2-x1;
+    // Control points: horizontal bias for tree branches
+    const cpOff=Math.abs(dx)*0.45+30;
+    const dir=dx>=0?1:-1;
     const pa=document.createElementNS('http://www.w3.org/2000/svg','path');
-    pa.setAttribute('d',`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+    pa.setAttribute('d',`M${x1},${y1} C${x1+dir*cpOff},${y1} ${x2-dir*cpOff},${y2} ${x2},${y2}`);
     svg.appendChild(pa);
   });
 }
 
+// ── Selection ──
 function sel(id){
   selId=id;cvs.querySelectorAll('.node').forEach(e=>e.classList.remove('selected'));
   const e=document.getElementById('node-'+id);if(e)e.classList.add('selected');
 }
 
-// ── Auto-layout engine ──
-const H_GAP = 200;   // horizontal gap between parent and children
-const V_GAP = 14;     // vertical gap between sibling nodes
-const NODE_H = 40;    // estimated node height
-
-function subtreeHeight(id) {
-  const n = nodes[id];
-  if (!n) return NODE_H;
-  const visChildren = n.collapsed ? [] : n.children.filter(c => nodes[c]);
-  if (visChildren.length === 0) return NODE_H;
-  let total = 0;
-  visChildren.forEach((c, i) => {
-    total += subtreeHeight(c);
-    if (i < visChildren.length - 1) total += V_GAP;
-  });
-  return Math.max(NODE_H, total);
-}
-
-function layoutTree(id, startX, startY) {
-  const n = nodes[id];
-  if (!n) return;
-  const visChildren = n.collapsed ? [] : n.children.filter(c => nodes[c]);
-
-  // Position this node
-  const myHeight = subtreeHeight(id);
-  n.x = startX;
-  n.y = startY + myHeight / 2 - NODE_H / 2;
-
-  // Position children
-  if (visChildren.length > 0) {
-    const childX = startX + H_GAP;
-    let childY = startY;
-    visChildren.forEach((cid, i) => {
-      layoutTree(cid, childX, childY);
-      childY += subtreeHeight(cid) + V_GAP;
-    });
-  }
-}
-
-function autoLayout() {
-  const root = Object.values(nodes).find(n => n.isRoot);
-  if (!root) return;
-  // Layout from root, centered vertically
-  const totalH = subtreeHeight(root.id);
-  const startY = window.innerHeight / 2 - totalH / 2;
-  const startX = 80;
-  layoutTree(root.id, startX, startY);
-
-  // Adjust pan so root stays roughly centered
-  panX = window.innerWidth / 2 - root.x - 80;
-  panY = window.innerHeight / 2 - root.y - NODE_H / 2;
-}
-
+// ── Add ──
 function addChild(){
   if(!selId){const r=Object.values(nodes).find(n=>n.isRoot);if(r)selId=r.id;else return}
   addChildTo(selId);
 }
-
 function addChildTo(pid){
   const p=nodes[pid];if(!p)return;
   if(p.collapsed)p.collapsed=false;
   const id=gid();
-  nodes[id]={id,label:'새 노드',x:0,y:0,
-    parent:pid,children:[],isTodo:false,done:false,isRoot:false,collapsed:false};
+  nodes[id]={id,label:'새 노드',x:p.x+150,y:p.y,parent:pid,children:[],
+    isTodo:false,done:false,isRoot:false,collapsed:false};
   p.children.push(id);
-  autoLayout();
-  renderAll();sel(id);
+  autoLayout();renderAll();sel(id);
   setTimeout(()=>editNode(id),80);
 }
-
 function addSibling(){if(!selId)return;const n=nodes[selId];if(!n||!n.parent)return;addChildTo(n.parent)}
 
+// ── Edit ──
 function editNode(id){
   const el=document.getElementById('node-'+id);if(!el)return;
   const lbl=el.querySelector('.node-label');
@@ -347,44 +417,60 @@ function editNode(id){
     if(e.key==='Escape'){lbl.textContent=nodes[id].label;lbl.blur()}
     if(e.key==='Tab')e.preventDefault();
   };
-
   const finish=()=>{
     lbl.removeEventListener('keydown',onKey,true);
     lbl.contentEditable=false;isEditing=false;
     const t=lbl.textContent.trim()||'노드';nodes[id].label=t;
-    lbl.innerHTML=esc(t);save();updatePanel()};
-
+    lbl.innerHTML=esc(t);save();updatePanel();
+  };
   lbl.addEventListener('keydown',onKey,true);
   lbl.addEventListener('blur',finish,{once:true});
 }
 
+// ── Delete ──
 function delNode(id){
   const n=nodes[id];if(!n||n.isRoot)return;
   const p=nodes[n.parent];if(p)p.children=p.children.filter(c=>c!==id);
   const rm=nid=>{const nd=nodes[nid];if(!nd)return;nd.children.forEach(c=>rm(c));delete nodes[nid]};
   rm(id);if(selId===id)selId=n.parent;
-  autoLayout();renderAll();
+  syncTodoOrder();autoLayout();renderAll();
 }
 
+// ── Todo / Collapse ──
 function toggleTodoSel(){if(!selId)return;const n=nodes[selId];if(!n||n.isRoot)return;
-  n.isTodo=!n.isTodo;if(!n.isTodo)n.done=false;renderAll();sel(selId)}
-function togDone(id){const n=nodes[id];if(!n)return;n.done=!n.done;renderAll();if(selId)sel(selId)}
-function togColl(id){const n=nodes[id];if(!n||n.children.length===0)return;n.collapsed=!n.collapsed;autoLayout();renderAll();sel(id)}
+  n.isTodo=!n.isTodo;if(!n.isTodo)n.done=false;syncTodoOrder();renderAll();sel(selId)}
+function togDone(id){const n=nodes[id];if(!n)return;n.done=!n.done;syncTodoOrder();renderAll();if(selId)sel(selId)}
+function togColl(id){const n=nodes[id];if(!n||n.children.length===0)return;
+  n.collapsed=!n.collapsed;autoLayout();renderAll();sel(id)}
 function toggleCollapseSel(){if(selId)togColl(selId)}
 
+// ── Todo Panel ──
 function togglePanel(){panelOpen=!panelOpen;document.getElementById('todo-panel').classList.toggle('open',panelOpen)}
 
 function updatePanel(){
   const list=document.getElementById('todo-list');
-  const todos=Object.values(nodes).filter(n=>n.isTodo&&!n.done);
+  syncTodoOrder();
+  const todos=todoOrder.map(id=>nodes[id]).filter(n=>n&&n.isTodo&&!n.done);
   document.getElementById('todo-count').textContent=todos.length;
+
   if(!todos.length){
     list.innerHTML='<div class="todo-empty">모든 할 일을 완료했어요!<br><br>노드를 선택하고 <kbd style="background:var(--surface2);border:1px solid var(--border);padding:1px 5px;border-radius:3px;font-size:10px">T</kbd> 키를 눌러<br>할 일로 만들 수 있어요.</div>';
     return;
   }
-  list.innerHTML=todos.map(n=>{const pa=getPath(n.id);
-    return `<div class="todo-item" onclick="focusNode('${n.id}')"><div class="todo-check" onclick="event.stopPropagation();togDone('${n.id}')"></div><div><div class="todo-item-label">${esc(n.label)}</div><div class="path">${pa}</div></div></div>`;
+
+  list.innerHTML=todos.map((n,i)=>{
+    const pa=getPath(n.id);
+    return `<div class="todo-item" data-todoid="${n.id}" data-idx="${i}">
+      <div class="drag-handle" data-draghandle="1">⠿</div>
+      <div class="todo-check" onclick="event.stopPropagation();togDone('${n.id}')"></div>
+      <div style="flex:1;min-width:0" onclick="focusNode('${n.id}')">
+        <div class="todo-item-label">${esc(n.label)}</div>
+        <div class="path">${pa}</div>
+      </div>
+    </div>`;
   }).join('');
+
+  initTodoDrag();
 }
 
 function getPath(id){const ps=[];let c=nodes[id];while(c&&c.parent){c=nodes[c.parent];if(c)ps.unshift(c.label)}return ps.join(' › ')}
@@ -392,18 +478,117 @@ function getPath(id){const ps=[];let c=nodes[id];while(c&&c.parent){c=nodes[c.pa
 function focusNode(id){
   const n=nodes[id];if(!n)return;
   let c=nodes[id];while(c&&c.parent){const p=nodes[c.parent];if(p&&p.collapsed)p.collapsed=false;c=p}
-  panX=window.innerWidth/2-n.x-60;panY=window.innerHeight/2-n.y-20;
+  autoLayout();
+  panX=window.innerWidth/2-n.x;panY=window.innerHeight/2-n.y;
   sel(id);renderAll();sel(id);
 }
 
-function showCtx(x,y){ctx.style.left=x+'px';ctx.style.top=y+'px';ctx.classList.add('show')}
+// ── Todo Drag-and-Drop Reorder ──
+function initTodoDrag(){
+  const list=document.getElementById('todo-list');
+  const items=list.querySelectorAll('.todo-item');
+  let dragItem=null,dragIdx=-1,placeholder=null;
+
+  items.forEach(item=>{
+    const handle=item.querySelector('[data-draghandle]');
+
+    const onStart=e=>{
+      e.preventDefault();e.stopPropagation();
+      dragItem=item;dragIdx=parseInt(item.dataset.idx);
+      item.classList.add('dragging');
+      item.style.position='relative';item.style.zIndex='10';
+    };
+
+    handle.addEventListener('pointerdown',e=>{
+      onStart(e);
+      handle.setPointerCapture(e.pointerId);
+
+      const onMove=ev=>{
+        if(!dragItem)return;
+        const listRect=list.getBoundingClientRect();
+        const y=ev.clientY-listRect.top+list.scrollTop;
+
+        const allItems=[...list.querySelectorAll('.todo-item:not(.dragging)')];
+        let insertBefore=-1;
+        for(let i=0;i<allItems.length;i++){
+          const r=allItems[i].getBoundingClientRect();
+          const mid=r.top+r.height/2;
+          if(ev.clientY<mid){insertBefore=i;break;}
+        }
+
+        // Remove old indicators
+        list.querySelectorAll('.todo-drop-indicator').forEach(el=>el.remove());
+
+        // Add indicator
+        const ind=document.createElement('div');
+        ind.className='todo-drop-indicator visible';
+        if(insertBefore>=0&&allItems[insertBefore]){
+          list.insertBefore(ind,allItems[insertBefore]);
+        } else {
+          list.appendChild(ind);
+        }
+
+        dragItem._insertBefore=insertBefore;
+      };
+
+      const onEnd=()=>{
+        handle.removeEventListener('pointermove',onMove);
+        handle.removeEventListener('pointerup',onEnd);
+        handle.removeEventListener('pointercancel',onEnd);
+        list.querySelectorAll('.todo-drop-indicator').forEach(el=>el.remove());
+        if(!dragItem)return;
+
+        dragItem.classList.remove('dragging');
+        dragItem.style.position='';dragItem.style.zIndex='';
+
+        const ib=dragItem._insertBefore;
+        if(ib!==undefined&&ib!==-1){
+          // Calculate new position in todoOrder
+          const activeTodos=todoOrder.filter(id=>{const n=nodes[id];return n&&n.isTodo&&!n.done});
+          const movedId=activeTodos[dragIdx];
+          if(movedId){
+            const filtered=activeTodos.filter(id=>id!==movedId);
+            const adjustedIdx=ib>dragIdx?ib-1:ib;
+            filtered.splice(Math.min(adjustedIdx,filtered.length),0,movedId);
+            // Rebuild todoOrder: keep done/inactive, replace active order
+            const activeSet=new Set(filtered);
+            todoOrder=todoOrder.filter(id=>!activeSet.has(id));
+            filtered.forEach((id,i)=>todoOrder.splice(todoOrder.length,0,id));
+            todoOrder=[...filtered,...todoOrder.filter(id=>!activeSet.has(id))];
+          }
+        } else if(ib===undefined||ib===-1){
+          // Moved to end
+          const activeTodos=todoOrder.filter(id=>{const n=nodes[id];return n&&n.isTodo&&!n.done});
+          const movedId=activeTodos[dragIdx];
+          if(movedId){
+            todoOrder=todoOrder.filter(id=>id!==movedId);
+            todoOrder.push(movedId);
+          }
+        }
+
+        dragItem=null;
+        save();updatePanel();
+      };
+
+      handle.addEventListener('pointermove',onMove);
+      handle.addEventListener('pointerup',onEnd);
+      handle.addEventListener('pointercancel',onEnd);
+    });
+  });
+}
+
+// ── Context Menu ──
+function showCtx(x,y){ctx.style.left=Math.min(x,window.innerWidth-200)+'px';
+  ctx.style.top=Math.min(y,window.innerHeight-250)+'px';ctx.classList.add('show')}
 function hideCtx(){ctx.classList.remove('show')}
 function ctxAct(a){hideCtx();if(!selId)return;
   ({child:()=>addChildTo(selId),sibling:addSibling,todo:toggleTodoSel,
     collapse:()=>togColl(selId),edit:()=>editNode(selId),delete:()=>delNode(selId)})[a]()}
 
+// ── Export / Import ──
 function exportJSON(){
-  const d=JSON.stringify({nodes,panX,panY},null,2),b=new Blob([d],{type:'application/json'}),u=URL.createObjectURL(b);
+  const d=JSON.stringify({nodes,panX,panY,todoOrder},null,2);
+  const b=new Blob([d],{type:'application/json'}),u=URL.createObjectURL(b);
   const a=document.createElement('a');a.href=u;a.download='mindflow-'+new Date().toISOString().slice(0,10)+'.json';
   a.click();URL.revokeObjectURL(u);toast('마인드맵을 저장했어요');
 }
@@ -411,94 +596,78 @@ function importJSON(e){
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
   r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.nodes){nodes=d.nodes;panX=d.panX||0;panY=d.panY||0;
+    todoOrder=d.todoOrder||[];
     Object.values(nodes).forEach(n=>{if(n.collapsed===undefined)n.collapsed=false});
-    renderAll();toast('마인드맵을 불러왔어요')}}catch(err){toast('파일을 읽을 수 없어요')}};
+    syncTodoOrder();renderAll();toast('마인드맵을 불러왔어요')}}catch(err){toast('파일을 읽을 수 없어요')}};
   r.readAsText(f);e.target.value='';
 }
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 
-// Pan
-cvs.addEventListener('mousedown',e=>{
-  if(e.target===cvs||e.target===svg){
-    isPanning=true;panSt.x=e.clientX-panX;panSt.y=e.clientY-panY;
-    cvs.classList.add('grabbing');hideCtx();selId=null;
-    cvs.querySelectorAll('.node').forEach(e=>e.classList.remove('selected'));
-  }
+// ── Canvas Pan (pointer events for touch) ──
+cvs.addEventListener('pointerdown',e=>{
+  if(e.target!==cvs&&e.target!==svg&&!e.target.closest('svg#lines'))return;
+  isPanning=true;panSt.x=e.clientX-panX;panSt.y=e.clientY-panY;
+  cvs.classList.add('grabbing');hideCtx();selId=null;
+  cvs.querySelectorAll('.node').forEach(e=>e.classList.remove('selected'));
+  cvs.setPointerCapture(e.pointerId);
 });
 
-function isDescendant(ancestorId,nodeId){
-  let c=nodes[nodeId];
-  while(c&&c.parent){if(c.parent===ancestorId)return true;c=nodes[c.parent]}
-  return false;
-}
-
-function findDropTarget(x,y,excludeId){
+// ── Drag helpers ──
+function isDescendant(aid,nid){let c=nodes[nid];while(c&&c.parent){if(c.parent===aid)return true;c=nodes[c.parent]}return false}
+function findDropTarget(x,y,exId){
   let best=null;
   cvs.querySelectorAll('.node').forEach(el=>{
     const nid=el.id.replace('node-','');
-    if(nid===excludeId)return;
-    if(isDescendant(excludeId,nid))return;
+    if(nid===exId||isDescendant(exId,nid))return;
     const r=el.getBoundingClientRect();
-    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) best=nid;
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)best=nid;
   });
   return best;
 }
 
-window.addEventListener('mousemove',e=>{
-  if(isPanning){panX=e.clientX-panSt.x;panY=e.clientY-panSt.y;reposAll()}
+window.addEventListener('pointermove',e=>{
+  if(isPanning){panX=e.clientX-panSt.x;panY=e.clientY-panSt.y;reposAll();return}
   if(isDrag&&dragId){
     dragMoved=true;
-    const n=nodes[dragId];n.x=e.clientX-dragOff.x-panX;n.y=e.clientY-dragOff.y-panY;
+    const n=nodes[dragId];
+    n.x=e.clientX-dragOff.x-panX;n.y=e.clientY-dragOff.y-panY;
     const el=document.getElementById('node-'+dragId);
     if(el){el.style.left=(n.x+panX)+'px';el.style.top=(n.y+panY)+'px'}
     drawLines();
-
-    // Highlight drop target
-    const newTarget=findDropTarget(e.clientX,e.clientY,dragId);
-    if(newTarget!==dropTargetId){
-      if(dropTargetId){const old=document.getElementById('node-'+dropTargetId);if(old)old.classList.remove('drop-target')}
-      dropTargetId=newTarget;
+    const newT=findDropTarget(e.clientX,e.clientY,dragId);
+    if(newT!==dropTargetId){
+      if(dropTargetId){const o=document.getElementById('node-'+dropTargetId);if(o)o.classList.remove('drop-target')}
+      dropTargetId=newT;
       if(dropTargetId){const ne=document.getElementById('node-'+dropTargetId);if(ne)ne.classList.add('drop-target')}
     }
   }
 });
 
-window.addEventListener('mouseup',e=>{
-  if(isPanning){isPanning=false;cvs.classList.remove('grabbing');save()}
+window.addEventListener('pointerup',e=>{
+  if(isPanning){isPanning=false;cvs.classList.remove('grabbing');save();return}
   if(isDrag){
-    // Clear drop target highlight
-    if(dropTargetId){
-      const dtEl=document.getElementById('node-'+dropTargetId);if(dtEl)dtEl.classList.remove('drop-target');
-    }
-
-    // Reparent if dropped on a valid target
+    if(dropTargetId){const dt=document.getElementById('node-'+dropTargetId);if(dt)dt.classList.remove('drop-target')}
     if(dragMoved&&dropTargetId&&dragId&&dragId!==dropTargetId){
-      const dragNode=nodes[dragId];
-      const targetNode=nodes[dropTargetId];
-      if(dragNode&&targetNode&&!dragNode.isRoot){
-        // Remove from old parent
-        const oldParent=nodes[dragNode.parent];
-        if(oldParent)oldParent.children=oldParent.children.filter(c=>c!==dragId);
-        // Add to new parent
-        dragNode.parent=dropTargetId;
-        targetNode.children.push(dragId);
-        if(targetNode.collapsed)targetNode.collapsed=false;
-        autoLayout();
-        toast(dragNode.label+' → '+targetNode.label);
+      const dn=nodes[dragId],tn=nodes[dropTargetId];
+      if(dn&&tn&&!dn.isRoot){
+        const op=nodes[dn.parent];if(op)op.children=op.children.filter(c=>c!==dragId);
+        dn.parent=dropTargetId;tn.children.push(dragId);
+        if(tn.collapsed)tn.collapsed=false;
+        autoLayout();toast(dn.label+' → '+tn.label);
       }
     }
-
     isDrag=false;dragId=null;dragMoved=false;dropTargetId=null;
     renderAll();if(selId)sel(selId);
   }
 });
+
 function reposAll(){
   Object.values(nodes).forEach(n=>{const el=document.getElementById('node-'+n.id);
     if(el){el.style.left=(n.x+panX)+'px';el.style.top=(n.y+panY)+'px'}});
   drawLines();
 }
 
-// Keys
+// ── Keyboard ──
 window.addEventListener('keydown',e=>{
   if(isEditing)return;
   if(e.key==='Tab'){e.preventDefault();addChild()}
