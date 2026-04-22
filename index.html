@@ -235,7 +235,17 @@ function syncTodoOrder(){
 function isVis(id){let c=nodes[id];while(c&&c.parent){const p=nodes[c.parent];if(!p||p.collapsed)return false;c=p}return true}
 
 // ── Hybrid Layout: Radial L1 (proportional) + Horizontal Tree L2+ ──
-const BRANCH_R=180,H_GAP=160,V_GAP=14,NODE_H=42,MIN_BRANCH_GAP=60;
+const BRANCH_R=180,H_MARGIN=40,V_GAP=14,NODE_H=42,MIN_BRANCH_GAP=60;
+
+function estimateW(id){
+  const n=nodes[id];if(!n)return 80;
+  const labelW=n.label.length*12+28; // ~12px per char + padding
+  let extra=0;
+  if(n.isTodo)extra+=25;             // checkbox
+  if(n.children.length>0)extra+=24;  // collapse btn
+  if(n.isRoot)extra+=14;             // larger padding
+  return Math.min(Math.max(labelW+extra,80),260);
+}
 
 function subtreeH(id){
   const n=nodes[id];if(!n)return NODE_H;
@@ -254,13 +264,16 @@ function layoutBranch(id,dir){
   let totalH=0;
   ch.forEach((c,i)=>{totalH+=subtreeH(c);if(i<ch.length-1)totalH+=V_GAP});
 
-  const childX=n.x+dir*H_GAP;
+  const parentW=estimateW(id);
   let childY=n.y+NODE_H/2-totalH/2;
 
   ch.forEach(cid=>{
     const h=subtreeH(cid);
     const cn=nodes[cid];
-    cn.x=childX;
+    // Right: child left edge = parent left edge + parent width + margin
+    // Left:  child left edge = parent left edge - child width - margin
+    if(dir>=0) cn.x=n.x+parentW+H_MARGIN;
+    else cn.x=n.x-estimateW(cid)-H_MARGIN;
     cn.y=childY+h/2-NODE_H/2;
     layoutBranch(cid,dir);
     childY+=h+V_GAP;
@@ -270,33 +283,32 @@ function layoutBranch(id,dir){
 function autoLayout(){
   const root=Object.values(nodes).find(n=>n.isRoot);
   if(!root)return;
-  root.x=0;root.y=0;
+  const rootW=estimateW(root.id);
+  // Root centered at origin
+  root.x=-rootW/2;root.y=-NODE_H/2;
 
   const L1=root.collapsed?[]:root.children.filter(c=>nodes[c]);
-  if(!L1.length)return;
+  if(!L1.length){panX=window.innerWidth/2;panY=window.innerHeight/2;return}
 
-  // Calculate the "weight" of each L1 branch = max(subtreeH, MIN_BRANCH_GAP)
   const weights=L1.map(cid=>Math.max(subtreeH(cid),MIN_BRANCH_GAP));
   const totalWeight=weights.reduce((a,b)=>a+b,0);
 
-  // Distribute angles proportionally, starting from top going clockwise
   let curAngle=-Math.PI/2;
 
   L1.forEach((cid,i)=>{
     const sweep=(weights[i]/totalWeight)*2*Math.PI;
     const midAngle=curAngle+sweep/2;
     const cn=nodes[cid];
-
-    // Direction: which side of center
     const dir=Math.cos(midAngle)>=0?1:-1;
+    const cw=estimateW(cid);
 
-    // Place L1 node at radial position
-    cn.x=BRANCH_R*Math.cos(midAngle);
-    cn.y=BRANCH_R*Math.sin(midAngle);
+    // Place L1: radial from center (0,0), adjust x for node width
+    const rx=BRANCH_R*Math.cos(midAngle);
+    const ry=BRANCH_R*Math.sin(midAngle);
+    cn.x=dir>=0?rx:rx-cw;
+    cn.y=ry-NODE_H/2;
 
-    // Layout sub-children as horizontal tree
     layoutBranch(cid,dir);
-
     curAngle+=sweep;
   });
 
