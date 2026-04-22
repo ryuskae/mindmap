@@ -234,8 +234,8 @@ function syncTodoOrder(){
 // ── Visibility ──
 function isVis(id){let c=nodes[id];while(c&&c.parent){const p=nodes[c.parent];if(!p||p.collapsed)return false;c=p}return true}
 
-// ── Hybrid Layout: Radial L1 + Horizontal Tree L2+ ──
-const BRANCH_R=180,H_GAP=170,V_GAP=14,NODE_H=42;
+// ── Hybrid Layout: Radial L1 (proportional) + Horizontal Tree L2+ ──
+const BRANCH_R=180,H_GAP=160,V_GAP=14,NODE_H=42,MIN_BRANCH_GAP=60;
 
 function subtreeH(id){
   const n=nodes[id];if(!n)return NODE_H;
@@ -245,7 +245,7 @@ function subtreeH(id){
   return Math.max(NODE_H,t);
 }
 
-// Layout a branch: children extend in direction dir, centered on parent's y
+// Layout a branch: children extend in direction dir, centered on parent
 function layoutBranch(id,dir){
   const n=nodes[id];if(!n)return;
   const ch=n.collapsed?[]:n.children.filter(c=>nodes[c]);
@@ -275,25 +275,29 @@ function autoLayout(){
   const L1=root.collapsed?[]:root.children.filter(c=>nodes[c]);
   if(!L1.length)return;
 
-  const count=L1.length;
+  // Calculate the "weight" of each L1 branch = max(subtreeH, MIN_BRANCH_GAP)
+  const weights=L1.map(cid=>Math.max(subtreeH(cid),MIN_BRANCH_GAP));
+  const totalWeight=weights.reduce((a,b)=>a+b,0);
+
+  // Distribute angles proportionally, starting from top going clockwise
+  let curAngle=-Math.PI/2;
 
   L1.forEach((cid,i)=>{
-    // Distribute evenly, starting from top-right going clockwise
-    const angle=-Math.PI/2+(i/count)*2*Math.PI;
+    const sweep=(weights[i]/totalWeight)*2*Math.PI;
+    const midAngle=curAngle+sweep/2;
     const cn=nodes[cid];
 
-    // Direction: right side or left side
-    const dir=Math.cos(angle)>=0?1:-1;
+    // Direction: which side of center
+    const dir=Math.cos(midAngle)>=0?1:-1;
 
-    // Calculate subtree height for this branch to offset radial position
-    const branchH=subtreeH(cid);
+    // Place L1 node at radial position
+    cn.x=BRANCH_R*Math.cos(midAngle);
+    cn.y=BRANCH_R*Math.sin(midAngle);
 
-    // Place first-level child at radial position
-    cn.x=BRANCH_R*Math.cos(angle);
-    cn.y=BRANCH_R*Math.sin(angle);
-
-    // Layout its sub-children as horizontal tree
+    // Layout sub-children as horizontal tree
     layoutBranch(cid,dir);
+
+    curAngle+=sweep;
   });
 
   panX=window.innerWidth/2;
