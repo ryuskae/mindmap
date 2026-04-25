@@ -54,8 +54,6 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 .node.todo.done .node-inner{opacity:.45}
 .node.todo.done .node-label{text-decoration:line-through;color:var(--text-dim)}
 .node.selected .node-inner{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow),var(--sh-md)}
-.node.drop-target .node-inner{border-color:var(--accent)!important;
-  box-shadow:0 0 0 3px var(--accent-glow),var(--sh-md)!important;background:var(--accent-light)!important}
 
 .node-label{font-size:13px;font-weight:400;color:var(--text);outline:none;min-width:20px;
   word-break:break-word;line-height:1.4;-webkit-user-select:text;user-select:text}
@@ -224,8 +222,6 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 // ── State ──
 let nodes={},todoOrder=[],selId=null,panelOpen=false,isEditing=false;
 let panX=0,panY=0,isPanning=false,panSt={x:0,y:0};
-let isDrag=false,dragId=null,dragOff={x:0,y:0},dragMoved=false,dropTargetId=null;
-let dragStartX=0,dragStartY=0,dragThreshold=8;
 let lastTap=0,lastTapId=null;
 
 const cvs=document.getElementById('canvas'),svg=document.getElementById('lines'),ctx=document.getElementById('ctx-menu');
@@ -305,21 +301,27 @@ function layoutBranch(id,dir){
   });
 }
 
-function autoLayout(resetPan){
+function autoLayout(anchorId){
   const root=Object.values(nodes).find(n=>n.isRoot);
   if(!root)return;
+
+  // Record anchor's screen position before layout
+  const anchor=anchorId?nodes[anchorId]:null;
+  let oldScreenX,oldScreenY;
+  if(anchor){oldScreenX=anchor.x+panX;oldScreenY=anchor.y+panY}
+
   const rootW=estimateW(root.id);
   root.x=-rootW/2;root.y=-NODE_H/2;
 
   const L1=root.collapsed?[]:root.children.filter(c=>nodes[c]);
   if(!L1.length){
-    if(resetPan){panX=window.innerWidth/2;panY=window.innerHeight/2}
+    if(!anchor){panX=window.innerWidth/2;panY=window.innerHeight/2}
+    else{panX=oldScreenX-root.x;panY=oldScreenY-root.y}
     return;
   }
 
   const weights=L1.map(cid=>Math.max(subtreeH(cid),MIN_BRANCH_GAP));
   const totalWeight=weights.reduce((a,b)=>a+b,0);
-
   let curAngle=-Math.PI/2;
 
   L1.forEach((cid,i)=>{
@@ -328,17 +330,17 @@ function autoLayout(resetPan){
     const cn=nodes[cid];
     const dir=Math.cos(midAngle)>=0?1:-1;
     const cw=estimateW(cid);
-
     const rx=BRANCH_R*Math.cos(midAngle);
     const ry=BRANCH_R*Math.sin(midAngle);
     cn.x=dir>=0?rx:rx-cw;
     cn.y=ry-NODE_H/2;
-
     layoutBranch(cid,dir);
     curAngle+=sweep;
   });
 
-  if(resetPan){panX=window.innerWidth/2;panY=window.innerHeight/2}
+  // Restore anchor's screen position by adjusting pan
+  if(anchor){panX=oldScreenX-anchor.x;panY=oldScreenY-anchor.y}
+  else{panX=window.innerWidth/2;panY=window.innerHeight/2}
 }
 
 // ── Render ──
@@ -377,7 +379,7 @@ function renderNode(n){
     else if(a==='del')delNode(nid);
   });
 
-  // Pointer events for drag + double-tap
+  // Pointer events for selection + double-tap to edit
   el.addEventListener('pointerdown',e=>{
     if(e.target.closest('[data-action]'))return;
     e.stopPropagation();e.preventDefault();
@@ -387,12 +389,6 @@ function renderNode(n){
     const now=Date.now();
     if(lastTapId===n.id&&now-lastTap<400){editNode(n.id);lastTap=0;lastTapId=null;return;}
     lastTap=now;lastTapId=n.id;
-
-    isDrag=true;dragId=n.id;dragMoved=false;
-    dragStartX=e.clientX;dragStartY=e.clientY;
-    const rect=el.getBoundingClientRect();
-    dragOff.x=e.clientX-rect.left;dragOff.y=e.clientY-rect.top;
-    el.setPointerCapture(e.pointerId);
   });
 
   el.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();sel(n.id);showCtx(e.clientX,e.clientY)});
@@ -440,7 +436,7 @@ function addChildTo(pid){
   nodes[id]={id,label:'새 노드',x:p.x+150,y:p.y,parent:pid,children:[],
     isTodo:false,done:false,isRoot:false,collapsed:false};
   p.children.push(id);
-  autoLayout();renderAll();sel(id);
+  autoLayout(pid);renderAll();sel(id);
   setTimeout(()=>editNode(id),80);
 }
 function addSibling(){if(!selId)return;const n=nodes[selId];if(!n||!n.parent)return;addChildTo(n.parent)}
@@ -475,7 +471,7 @@ function delNode(id){
   const p=nodes[n.parent];if(p)p.children=p.children.filter(c=>c!==id);
   const rm=nid=>{const nd=nodes[nid];if(!nd)return;nd.children.forEach(c=>rm(c));delete nodes[nid]};
   rm(id);if(selId===id)selId=n.parent;
-  syncTodoOrder();autoLayout();renderAll();
+  syncTodoOrder();autoLayout(n.parent);renderAll();
 }
 
 // ── Todo / Collapse ──
@@ -483,7 +479,7 @@ function toggleTodoSel(){if(!selId)return;const n=nodes[selId];if(!n||n.isRoot)r
   n.isTodo=!n.isTodo;if(!n.isTodo)n.done=false;syncTodoOrder();renderAll();sel(selId)}
 function togDone(id){const n=nodes[id];if(!n)return;n.done=!n.done;syncTodoOrder();renderAll();if(selId)sel(selId)}
 function togColl(id){const n=nodes[id];if(!n||n.children.length===0)return;
-  n.collapsed=!n.collapsed;autoLayout();renderAll();sel(id)}
+  n.collapsed=!n.collapsed;autoLayout(id);renderAll();sel(id)}
 function toggleCollapseSel(){if(selId)togColl(selId)}
 
 // ── Todo Panel ──
@@ -656,58 +652,13 @@ cvs.addEventListener('pointerdown',e=>{
 
 // ── Drag helpers ──
 function isDescendant(aid,nid){let c=nodes[nid];while(c&&c.parent){if(c.parent===aid)return true;c=nodes[c.parent]}return false}
-function findDropTarget(x,y,exId){
-  let best=null;
-  cvs.querySelectorAll('.node').forEach(el=>{
-    const nid=el.id.replace('node-','');
-    if(nid===exId||isDescendant(exId,nid))return;
-    const r=el.getBoundingClientRect();
-    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)best=nid;
-  });
-  return best;
-}
 
 window.addEventListener('pointermove',e=>{
-  if(isPanning){panX=e.clientX-panSt.x;panY=e.clientY-panSt.y;reposAll();return}
-  if(isDrag&&dragId){
-    // Check threshold before starting actual drag
-    if(!dragMoved){
-      const dx=e.clientX-dragStartX,dy=e.clientY-dragStartY;
-      if(Math.abs(dx)<dragThreshold&&Math.abs(dy)<dragThreshold)return;
-      dragMoved=true;
-    }
-    const n=nodes[dragId];
-    n.x=e.clientX-dragOff.x-panX;n.y=e.clientY-dragOff.y-panY;
-    const el=document.getElementById('node-'+dragId);
-    if(el){el.style.left=(n.x+panX)+'px';el.style.top=(n.y+panY)+'px'}
-    drawLines();
-    const newT=findDropTarget(e.clientX,e.clientY,dragId);
-    if(newT!==dropTargetId){
-      if(dropTargetId){const o=document.getElementById('node-'+dropTargetId);if(o)o.classList.remove('drop-target')}
-      dropTargetId=newT;
-      if(dropTargetId){const ne=document.getElementById('node-'+dropTargetId);if(ne)ne.classList.add('drop-target')}
-    }
-  }
+  if(isPanning){panX=e.clientX-panSt.x;panY=e.clientY-panSt.y;reposAll()}
 });
 
 window.addEventListener('pointerup',e=>{
-  if(isPanning){isPanning=false;cvs.classList.remove('grabbing');save();return}
-  if(isDrag){
-    if(dropTargetId){const dt=document.getElementById('node-'+dropTargetId);if(dt)dt.classList.remove('drop-target')}
-    if(dragMoved&&dropTargetId&&dragId&&dragId!==dropTargetId){
-      const dn=nodes[dragId],tn=nodes[dropTargetId];
-      if(dn&&tn&&!dn.isRoot){
-        const op=nodes[dn.parent];if(op)op.children=op.children.filter(c=>c!==dragId);
-        dn.parent=dropTargetId;tn.children.push(dragId);
-        if(tn.collapsed)tn.collapsed=false;
-        autoLayout();toast(dn.label+' → '+tn.label);
-      }
-    }
-    const wasDragged=dragMoved;
-    isDrag=false;dragId=null;dragMoved=false;dropTargetId=null;
-    if(wasDragged){renderAll();if(selId)sel(selId)}
-    else save();
-  }
+  if(isPanning){isPanning=false;cvs.classList.remove('grabbing');save()}
 });
 
 function reposAll(){
