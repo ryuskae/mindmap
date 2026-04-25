@@ -225,6 +225,7 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 let nodes={},todoOrder=[],selId=null,panelOpen=false,isEditing=false;
 let panX=0,panY=0,isPanning=false,panSt={x:0,y:0};
 let isDrag=false,dragId=null,dragOff={x:0,y:0},dragMoved=false,dropTargetId=null;
+let dragStartX=0,dragStartY=0,dragThreshold=8;
 let lastTap=0,lastTapId=null;
 
 const cvs=document.getElementById('canvas'),svg=document.getElementById('lines'),ctx=document.getElementById('ctx-menu');
@@ -388,6 +389,7 @@ function renderNode(n){
     lastTap=now;lastTapId=n.id;
 
     isDrag=true;dragId=n.id;dragMoved=false;
+    dragStartX=e.clientX;dragStartY=e.clientY;
     const rect=el.getBoundingClientRect();
     dragOff.x=e.clientX-rect.left;dragOff.y=e.clientY-rect.top;
     el.setPointerCapture(e.pointerId);
@@ -668,7 +670,12 @@ function findDropTarget(x,y,exId){
 window.addEventListener('pointermove',e=>{
   if(isPanning){panX=e.clientX-panSt.x;panY=e.clientY-panSt.y;reposAll();return}
   if(isDrag&&dragId){
-    dragMoved=true;
+    // Check threshold before starting actual drag
+    if(!dragMoved){
+      const dx=e.clientX-dragStartX,dy=e.clientY-dragStartY;
+      if(Math.abs(dx)<dragThreshold&&Math.abs(dy)<dragThreshold)return;
+      dragMoved=true;
+    }
     const n=nodes[dragId];
     n.x=e.clientX-dragOff.x-panX;n.y=e.clientY-dragOff.y-panY;
     const el=document.getElementById('node-'+dragId);
@@ -696,8 +703,10 @@ window.addEventListener('pointerup',e=>{
         autoLayout();toast(dn.label+' → '+tn.label);
       }
     }
+    const wasDragged=dragMoved;
     isDrag=false;dragId=null;dragMoved=false;dropTargetId=null;
-    renderAll();if(selId)sel(selId);
+    if(wasDragged){renderAll();if(selId)sel(selId)}
+    else save();
   }
 });
 
