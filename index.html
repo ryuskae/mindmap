@@ -344,10 +344,14 @@ function autoLayout(anchorId){
 }
 
 // ── Render ──
-function renderAll(){
+function renderOnly(){
   cvs.querySelectorAll('.node').forEach(e=>e.remove());
   Object.values(nodes).forEach(n=>{if(isVis(n.id))renderNode(n)});
   drawLines();updatePanel();save();
+}
+function renderAll(anchorId){
+  autoLayout(anchorId||selId);
+  renderOnly();
 }
 
 function renderNode(n){
@@ -436,7 +440,7 @@ function addChildTo(pid){
   nodes[id]={id,label:'새 노드',x:p.x+150,y:p.y,parent:pid,children:[],
     isTodo:false,done:false,isRoot:false,collapsed:false};
   p.children.push(id);
-  autoLayout(pid);renderAll();sel(id);
+  renderAll(pid);sel(id);
   setTimeout(()=>editNode(id),80);
 }
 function addSibling(){if(!selId)return;const n=nodes[selId];if(!n||!n.parent)return;addChildTo(n.parent)}
@@ -459,7 +463,7 @@ function editNode(id){
     lbl.removeEventListener('keydown',onKey,true);
     lbl.contentEditable=false;isEditing=false;
     const t=lbl.textContent.trim()||'노드';nodes[id].label=t;
-    lbl.innerHTML=esc(t);save();updatePanel();
+    renderAll(id);
   };
   lbl.addEventListener('keydown',onKey,true);
   lbl.addEventListener('blur',finish,{once:true});
@@ -471,7 +475,7 @@ function delNode(id){
   const p=nodes[n.parent];if(p)p.children=p.children.filter(c=>c!==id);
   const rm=nid=>{const nd=nodes[nid];if(!nd)return;nd.children.forEach(c=>rm(c));delete nodes[nid]};
   rm(id);if(selId===id)selId=n.parent;
-  syncTodoOrder();autoLayout(n.parent);renderAll();
+  syncTodoOrder();renderAll(n.parent);
 }
 
 // ── Todo / Collapse ──
@@ -479,7 +483,7 @@ function toggleTodoSel(){if(!selId)return;const n=nodes[selId];if(!n||n.isRoot)r
   n.isTodo=!n.isTodo;if(!n.isTodo)n.done=false;syncTodoOrder();renderAll();sel(selId)}
 function togDone(id){const n=nodes[id];if(!n)return;n.done=!n.done;syncTodoOrder();renderAll();if(selId)sel(selId)}
 function togColl(id){const n=nodes[id];if(!n||n.children.length===0)return;
-  n.collapsed=!n.collapsed;autoLayout(id);renderAll();sel(id)}
+  n.collapsed=!n.collapsed;renderAll(id);sel(id)}
 function toggleCollapseSel(){if(selId)togColl(selId)}
 
 // ── Todo Panel ──
@@ -517,8 +521,9 @@ function focusNode(id){
   const n=nodes[id];if(!n)return;
   let c=nodes[id];while(c&&c.parent){const p=nodes[c.parent];if(p&&p.collapsed)p.collapsed=false;c=p}
   autoLayout();
-  panX=window.innerWidth/2-n.x;panY=window.innerHeight/2-n.y;
-  sel(id);renderAll();sel(id);
+  panX=window.innerWidth/2-n.x-estimateW(id)/2;
+  panY=window.innerHeight/2-n.y-NODE_H/2;
+  sel(id);renderOnly();sel(id);
 }
 
 // ── Todo Drag-and-Drop Reorder ──
@@ -649,9 +654,6 @@ cvs.addEventListener('pointerdown',e=>{
   cvs.querySelectorAll('.node').forEach(e=>e.classList.remove('selected'));
   cvs.setPointerCapture(e.pointerId);
 });
-
-// ── Drag helpers ──
-function isDescendant(aid,nid){let c=nodes[nid];while(c&&c.parent){if(c.parent===aid)return true;c=nodes[c.parent]}return false}
 
 window.addEventListener('pointermove',e=>{
   if(isPanning){panX=e.clientX-panSt.x;panY=e.clientY-panSt.y;reposAll()}
