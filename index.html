@@ -514,12 +514,12 @@ function delNode(id){
 
 // ── Todo / Collapse ──
 function toggleTodoSel(){if(!selId)return;const n=nodes[selId];if(!n||n.isRoot)return;
-  n.isTodo=!n.isTodo;if(!n.isTodo){n.done=false;delete n.doneAt}syncTodoOrder();renderAll();sel(selId)}
+  n.isTodo=!n.isTodo;if(!n.isTodo){n.done=false;delete n.doneAt}syncTodoOrder();renderAll(selId);sel(selId)}
 function togDone(id){const n=nodes[id];if(!n)return;
   n.done=!n.done;
   if(n.done)n.doneAt=Date.now();
   else delete n.doneAt;
-  syncTodoOrder();renderAll();if(selId)sel(selId)}
+  syncTodoOrder();renderOnly();if(selId)sel(selId)}
 function togColl(id){const n=nodes[id];if(!n||n.children.length===0)return;
   n.collapsed=!n.collapsed;renderAll(id);sel(id)}
 function toggleCollapseSel(){if(selId)togColl(selId)}
@@ -828,7 +828,8 @@ function toast(m){const t=document.getElementById('toast');t.textContent=m;t.cla
 cvs.addEventListener('pointerdown',e=>{
   if(e.target!==cvs&&e.target!==svg&&!e.target.closest('svg#lines'))return;
   isPanning=true;panSt.x=e.clientX-panX;panSt.y=e.clientY-panY;
-  cvs.classList.add('grabbing');hideCtx();selId=null;
+  cvs.classList.add('grabbing');hideCtx();
+  // Visually deselect but keep selId as layout anchor
   cvs.querySelectorAll('.node').forEach(e=>e.classList.remove('selected'));
   cvs.setPointerCapture(e.pointerId);
 });
@@ -880,6 +881,7 @@ window.addEventListener('pointerup',e=>{
     const el=document.getElementById('node-'+dragId);
     if(el)el.classList.remove('dragging');
 
+    let didReparent=false;
     if(dragMoved&&dropTargetId&&dragId){
       // Reparent
       const dn=nodes[dragId],tn=nodes[dropTargetId];
@@ -887,12 +889,15 @@ window.addEventListener('pointerup',e=>{
         const op=nodes[dn.parent];if(op)op.children=op.children.filter(c=>c!==dragId);
         dn.parent=dropTargetId;tn.children.push(dragId);
         if(tn.collapsed)tn.collapsed=false;
+        didReparent=true;
         toast(dn.label+' → '+tn.label);
       }
     }
-    const wasDragged=dragMoved;
+    const savedDragId=dragId;
+    const wasMoved=dragMoved;
     isDrag=false;dragId=null;dragMoved=false;dropTargetId=null;
-    if(wasDragged)renderAll();
+    if(didReparent)renderAll(savedDragId);
+    else if(wasMoved)renderOnly(); // snap back to correct position, no re-layout
   }
 });
 
