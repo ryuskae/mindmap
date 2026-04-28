@@ -264,24 +264,75 @@ const gid=()=>'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 // ── Init ──
-const DATA_VERSION=2;
 function init(){
   const s=localStorage.getItem('mindflow-data');
   if(s){try{const d=JSON.parse(s);nodes=d.nodes||{};
     todoOrder=d.todoOrder||[];
-    Object.values(nodes).forEach(n=>{
-      if(n.collapsed===undefined)n.collapsed=false;
-      // Always strip coordinates — they are computed
-      delete n.x;delete n.y;
-      n.x=0;n.y=0;
-    });
-    // If old format had panX/panY, discard it
+    repairData();
   }catch(e){mkDefault()}}else mkDefault();
   syncTodoOrder();
   autoLayout();
   panX=window.innerWidth/2;panY=window.innerHeight/2;
   render();
 }
+
+// ── Data Integrity Repair ──
+function repairData(){
+  // Strip old coordinates
+  Object.values(nodes).forEach(n=>{
+    n.x=0;n.y=0;
+    if(n.collapsed===undefined)n.collapsed=false;
+    if(!n.children)n.children=[];
+    if(!n.id)delete nodes[n.id]; // remove invalid
+  });
+
+  // Ensure exactly one root
+  const roots=Object.values(nodes).filter(n=>n.isRoot);
+  if(roots.length===0){mkDefault();return}
+  if(roots.length>1){roots.slice(1).forEach(r=>r.isRoot=false)}
+
+  // Fix orphans: nodes whose parent doesn't exist
+  Object.values(nodes).forEach(n=>{
+    if(n.parent&&!nodes[n.parent]){
+      // Attach orphan to root
+      const root=Object.values(nodes).find(r=>r.isRoot);
+      n.parent=root.id;
+      if(!root.children.includes(n.id))root.children.push(n.id);
+    }
+  });
+
+  // Fix children arrays: remove references to non-existent nodes
+  Object.values(nodes).forEach(n=>{
+    n.children=n.children.filter(cid=>nodes[cid]);
+  });
+
+  // Fix children-parent sync
+  Object.values(nodes).forEach(n=>{
+    if(n.parent&&nodes[n.parent]){
+      const p=nodes[n.parent];
+      if(!p.children.includes(n.id))p.children.push(n.id);
+    }
+  });
+
+  // Detect circular references
+  Object.values(nodes).forEach(n=>{
+    const seen=new Set();
+    let cur=n;
+    while(cur&&cur.parent){
+      if(seen.has(cur.id)){
+        // Break the cycle
+        cur.parent=null;
+        const root=Object.values(nodes).find(r=>r.isRoot);
+        cur.parent=root.id;
+        if(!root.children.includes(cur.id))root.children.push(cur.id);
+        break;
+      }
+      seen.add(cur.id);
+      cur=nodes[cur.parent];
+    }
+  });
+}
+
 function mkDefault(){
   const id=gid();
   nodes={[id]:{id,label:'마인드맵',x:0,y:0,parent:null,children:[],
@@ -289,12 +340,11 @@ function mkDefault(){
   panX=window.innerWidth/2;panY=window.innerHeight/2;todoOrder=[];
 }
 function saveData(){
-  // Save structure only — coordinates are always recalculated by autoLayout
   const struct={};
   Object.entries(nodes).forEach(([k,n])=>{
-    struct[k]={id:n.id,label:n.label,parent:n.parent,children:n.children,
-      isTodo:n.isTodo,done:n.done,isRoot:n.isRoot,collapsed:n.collapsed,
-      doneAt:n.doneAt};
+    struct[k]={id:n.id,label:n.label,parent:n.parent,children:[...n.children],
+      isTodo:!!n.isTodo,done:!!n.done,isRoot:!!n.isRoot,collapsed:!!n.collapsed,
+      doneAt:n.doneAt||undefined};
   });
   localStorage.setItem('mindflow-data',JSON.stringify({nodes:struct,todoOrder}));
 }
@@ -845,20 +895,20 @@ function importJSON(e){
   r.readAsText(f);e.target.value='';
 }
 function resetCache(){
-  if(!confirm('캐시를 초기화하시겠어요?\n\n레이아웃이 이상할 때 사용하세요.\n데이터는 유지되고 레이아웃만 다시 계산됩니다.'))return;
-  // Keep current node structure, clear all storage, re-init
-  const backup=JSON.stringify({nodes,todoOrder});
-  localStorage.clear();
-  try{
-    const d=JSON.parse(backup);
-    nodes=d.nodes||{};todoOrder=d.todoOrder||[];
-    Object.values(nodes).forEach(n=>{n.x=0;n.y=0});
-  }catch(e){mkDefault()}
-  syncTodoOrder();
-  autoLayout();
-  panX=window.innerWidth/2;panY=window.innerHeight/2;
-  render();
-  toast('캐시를 초기화했어요');
+  const choice=prompt('어떤 초기화를 할까요?\n\n1 = 레이아웃만 초기화 (데이터 유지)\n2 = 완전 초기화 (모든 데이터 삭제)\n\n숫자를 입력하세요:');
+  if(choice==='1'){
+    // Soft reset: keep data, recompute layout
+    repairData();
+    syncTodoOrder();
+    autoLayout();
+    panX=window.innerWidth/2;panY=window.innerHeight/2;
+    render();
+    toast('레이아웃을 초기화했어요');
+  } else if(choice==='2'){
+    if(!confirm('정말 모든 데이터를 삭제하시겠어요?\n먼저 저장 버튼으로 백업하세요!'))return;
+    localStorage.clear();
+    location.reload();
+  }
 }
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 
@@ -1048,31 +1098,16 @@ window.addEventListener('click',e=>{
 init();
 
 // ── Safari tab lifecycle fix ──
-// When Safari suspends/resumes a tab, JS state can become stale.
-// Re-render from scratch whenever the tab becomes visible again.
+// iPad Safari destroys tab state (CSS, DOM) when suspending background tabs.
+// The only reliable fix is a full page reload when the tab wakes up.
+let hiddenAt=0;
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'){
-    autoLayout();
-    panX=window.innerWidth/2;panY=window.innerHeight/2;
-    render();
+  if(document.visibilityState==='hidden') hiddenAt=Date.now();
+  else if(document.visibilityState==='visible'&&hiddenAt&&Date.now()-hiddenAt>2000){
+    location.reload();
   }
 });
-
-// BFCache restore (back/forward navigation)
-window.addEventListener('pageshow',e=>{
-  if(e.persisted){
-    autoLayout();
-    panX=window.innerWidth/2;panY=window.innerHeight/2;
-    render();
-  }
-});
-
-// Screen rotation or Safari chrome changes
-window.addEventListener('resize',()=>{
-  autoLayout();
-  panX=window.innerWidth/2;panY=window.innerHeight/2;
-  render();
-});
+window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
 </script>
 
 </body>
