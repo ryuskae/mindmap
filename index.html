@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>MindFlow — 마인드맵 + 할 일</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -212,6 +215,9 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
   </button><div class="tb-sep"></div>
   <button class="tb-btn" onclick="toggleSearch()" title="Ctrl+F">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>검색
+  </button><div class="tb-sep"></div>
+  <button class="tb-btn" onclick="resetCache()" title="캐시 초기화" style="color:var(--danger)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9"/><polyline points="3 3 3 7 7 7"/></svg>초기화
   </button>
   <input type="file" id="file-input" accept=".json" onchange="importJSON(event)">
 </div>
@@ -256,17 +262,20 @@ const gid=()=>'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 // ── Init ──
+const DATA_VERSION=2;
 function init(){
   const s=localStorage.getItem('mindflow-data');
   if(s){try{const d=JSON.parse(s);nodes=d.nodes||{};
     todoOrder=d.todoOrder||[];
     Object.values(nodes).forEach(n=>{
       if(n.collapsed===undefined)n.collapsed=false;
-      n.x=0;n.y=0; // always recalculate
+      // Always strip coordinates — they are computed
+      delete n.x;delete n.y;
+      n.x=0;n.y=0;
     });
+    // If old format had panX/panY, discard it
   }catch(e){mkDefault()}}else mkDefault();
   syncTodoOrder();
-  // Fresh layout centered on screen
   autoLayout();
   panX=window.innerWidth/2;panY=window.innerHeight/2;
   render();
@@ -825,10 +834,29 @@ function importJSON(e){
   const r=new FileReader();
   r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.nodes){nodes=d.nodes;
     todoOrder=d.todoOrder||[];
-    Object.values(nodes).forEach(n=>{if(n.collapsed===undefined)n.collapsed=false;n.x=0;n.y=0});
+    Object.values(nodes).forEach(n=>{
+      if(n.collapsed===undefined)n.collapsed=false;
+      delete n.x;delete n.y;n.x=0;n.y=0;
+    });
     syncTodoOrder();autoLayout();panX=window.innerWidth/2;panY=window.innerHeight/2;
     render();toast('마인드맵을 불러왔어요')}}catch(err){toast('파일을 읽을 수 없어요')}};
   r.readAsText(f);e.target.value='';
+}
+function resetCache(){
+  if(!confirm('캐시를 초기화하시겠어요?\n\n레이아웃이 이상할 때 사용하세요.\n데이터는 유지되고 레이아웃만 다시 계산됩니다.'))return;
+  // Keep current node structure, clear all storage, re-init
+  const backup=JSON.stringify({nodes,todoOrder});
+  localStorage.clear();
+  try{
+    const d=JSON.parse(backup);
+    nodes=d.nodes||{};todoOrder=d.todoOrder||[];
+    Object.values(nodes).forEach(n=>{n.x=0;n.y=0});
+  }catch(e){mkDefault()}
+  syncTodoOrder();
+  autoLayout();
+  panX=window.innerWidth/2;panY=window.innerHeight/2;
+  render();
+  toast('캐시를 초기화했어요');
 }
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 
