@@ -258,12 +258,18 @@ const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 // ── Init ──
 function init(){
   const s=localStorage.getItem('mindflow-data');
-  if(s){try{const d=JSON.parse(s);nodes=d.nodes||{};panX=d.panX||0;panY=d.panY||0;
+  if(s){try{const d=JSON.parse(s);nodes=d.nodes||{};
     todoOrder=d.todoOrder||[];
-    Object.values(nodes).forEach(n=>{if(n.collapsed===undefined)n.collapsed=false});
+    Object.values(nodes).forEach(n=>{
+      if(n.collapsed===undefined)n.collapsed=false;
+      n.x=0;n.y=0; // always recalculate
+    });
   }catch(e){mkDefault()}}else mkDefault();
   syncTodoOrder();
-  renderAll();
+  // Fresh layout centered on screen
+  autoLayout();
+  panX=window.innerWidth/2;panY=window.innerHeight/2;
+  render();
 }
 function mkDefault(){
   const id=gid();
@@ -271,7 +277,16 @@ function mkDefault(){
     isTodo:false,done:false,isRoot:true,collapsed:false}};
   panX=window.innerWidth/2;panY=window.innerHeight/2;todoOrder=[];
 }
-function save(){localStorage.setItem('mindflow-data',JSON.stringify({nodes,panX,panY,todoOrder}))}
+function saveData(){
+  // Save structure only — coordinates are always recalculated by autoLayout
+  const struct={};
+  Object.entries(nodes).forEach(([k,n])=>{
+    struct[k]={id:n.id,label:n.label,parent:n.parent,children:n.children,
+      isTodo:n.isTodo,done:n.done,isRoot:n.isRoot,collapsed:n.collapsed,
+      doneAt:n.doneAt};
+  });
+  localStorage.setItem('mindflow-data',JSON.stringify({nodes:struct,todoOrder}));
+}
 
 function syncTodoOrder(){
   const active=new Set(Object.values(nodes).filter(n=>n.isTodo&&!n.done).map(n=>n.id));
@@ -328,24 +343,14 @@ function layoutBranch(id,dir){
   });
 }
 
-function autoLayout(anchorId){
+function autoLayout(){
   const root=Object.values(nodes).find(n=>n.isRoot);
   if(!root)return;
-
-  // Record anchor's screen position before layout
-  const anchor=anchorId?nodes[anchorId]:null;
-  let oldScreenX,oldScreenY;
-  if(anchor){oldScreenX=anchor.x+panX;oldScreenY=anchor.y+panY}
-
   const rootW=estimateW(root.id);
   root.x=-rootW/2;root.y=-NODE_H/2;
 
   const L1=root.collapsed?[]:root.children.filter(c=>nodes[c]);
-  if(!L1.length){
-    if(!anchor){panX=window.innerWidth/2;panY=window.innerHeight/2}
-    else{panX=oldScreenX-root.x;panY=oldScreenY-root.y}
-    return;
-  }
+  if(!L1.length)return;
 
   const weights=L1.map(cid=>Math.max(subtreeH(cid),MIN_BRANCH_GAP));
   const totalWeight=weights.reduce((a,b)=>a+b,0);
@@ -364,21 +369,23 @@ function autoLayout(anchorId){
     layoutBranch(cid,dir);
     curAngle+=sweep;
   });
-
-  // Restore anchor's screen position by adjusting pan
-  if(anchor){panX=oldScreenX-anchor.x;panY=oldScreenY-anchor.y}
-  else{panX=window.innerWidth/2;panY=window.innerHeight/2}
 }
 
-// ── Render ──
-function renderOnly(){
+// ── Render (DOM only, no layout recalc) ──
+function render(){
   cvs.querySelectorAll('.node').forEach(e=>e.remove());
   Object.values(nodes).forEach(n=>{if(isVis(n.id))renderNode(n)});
-  drawLines();updatePanel();save();
+  drawLines();updatePanel();saveData();
 }
-function renderAll(anchorId){
-  autoLayout(anchorId||selId);
-  renderOnly();
+
+// ── Relayout + Render (recalc positions, keep anchorId in same screen spot) ──
+function relayout(anchorId){
+  const anchor=anchorId?nodes[anchorId]:null;
+  let ox,oy;
+  if(anchor){ox=anchor.x+panX;oy=anchor.y+panY}
+  autoLayout();
+  if(anchor){panX=ox-anchor.x;panY=oy-anchor.y}
+  render();
 }
 
 function renderNode(n){
@@ -474,7 +481,7 @@ function addChildTo(pid){
   nodes[id]={id,label:'새 노드',x:p.x+150,y:p.y,parent:pid,children:[],
     isTodo:false,done:false,isRoot:false,collapsed:false};
   p.children.push(id);
-  renderAll(pid);sel(id);
+  relayout(pid);sel(id);
   setTimeout(()=>editNode(id),80);
 }
 function addSibling(){if(!selId)return;const n=nodes[selId];if(!n||!n.parent)return;addChildTo(n.parent)}
@@ -497,7 +504,7 @@ function editNode(id){
     lbl.removeEventListener('keydown',onKey,true);
     lbl.contentEditable=false;isEditing=false;
     const t=lbl.textContent.trim()||'노드';nodes[id].label=t;
-    renderAll(id);
+    relayout(id);
   };
   lbl.addEventListener('keydown',onKey,true);
   lbl.addEventListener('blur',finish,{once:true});
@@ -509,19 +516,19 @@ function delNode(id){
   const p=nodes[n.parent];if(p)p.children=p.children.filter(c=>c!==id);
   const rm=nid=>{const nd=nodes[nid];if(!nd)return;nd.children.forEach(c=>rm(c));delete nodes[nid]};
   rm(id);if(selId===id)selId=n.parent;
-  syncTodoOrder();renderAll(n.parent);
+  syncTodoOrder();relayout(n.parent);
 }
 
 // ── Todo / Collapse ──
 function toggleTodoSel(){if(!selId)return;const n=nodes[selId];if(!n||n.isRoot)return;
-  n.isTodo=!n.isTodo;if(!n.isTodo){n.done=false;delete n.doneAt}syncTodoOrder();renderAll(selId);sel(selId)}
+  n.isTodo=!n.isTodo;if(!n.isTodo){n.done=false;delete n.doneAt}syncTodoOrder();relayout(selId);sel(selId)}
 function togDone(id){const n=nodes[id];if(!n)return;
   n.done=!n.done;
   if(n.done)n.doneAt=Date.now();
   else delete n.doneAt;
-  syncTodoOrder();renderOnly();if(selId)sel(selId)}
+  syncTodoOrder();render();if(selId)sel(selId)}
 function togColl(id){const n=nodes[id];if(!n||n.children.length===0)return;
-  n.collapsed=!n.collapsed;renderAll(id);sel(id)}
+  n.collapsed=!n.collapsed;relayout(id);sel(id)}
 function toggleCollapseSel(){if(selId)togColl(selId)}
 
 // ── Todo Panel ──
@@ -701,7 +708,7 @@ function focusNode(id){
   autoLayout();
   panX=window.innerWidth/2-n.x-estimateW(id)/2;
   panY=window.innerHeight/2-n.y-NODE_H/2;
-  sel(id);renderOnly();sel(id);
+  sel(id);render();sel(id);
 }
 
 // ── Todo Drag-and-Drop Reorder ──
@@ -788,7 +795,7 @@ function initTodoDrag(){
         }
 
         dragItem=null;
-        save();updatePanel();
+        saveData();updatePanel();
       };
 
       handle.addEventListener('pointermove',onMove);
@@ -816,10 +823,11 @@ function exportJSON(){
 function importJSON(e){
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.nodes){nodes=d.nodes;panX=d.panX||0;panY=d.panY||0;
+  r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.nodes){nodes=d.nodes;
     todoOrder=d.todoOrder||[];
-    Object.values(nodes).forEach(n=>{if(n.collapsed===undefined)n.collapsed=false});
-    syncTodoOrder();renderAll();toast('마인드맵을 불러왔어요')}}catch(err){toast('파일을 읽을 수 없어요')}};
+    Object.values(nodes).forEach(n=>{if(n.collapsed===undefined)n.collapsed=false;n.x=0;n.y=0});
+    syncTodoOrder();autoLayout();panX=window.innerWidth/2;panY=window.innerHeight/2;
+    render();toast('마인드맵을 불러왔어요')}}catch(err){toast('파일을 읽을 수 없어요')}};
   r.readAsText(f);e.target.value='';
 }
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
@@ -874,7 +882,7 @@ window.addEventListener('pointermove',e=>{
 });
 
 window.addEventListener('pointerup',e=>{
-  if(isPanning){isPanning=false;cvs.classList.remove('grabbing');save();return}
+  if(isPanning){isPanning=false;cvs.classList.remove('grabbing');return}
   if(isDrag){
     // Clear highlights
     if(dropTargetId){const dt=document.getElementById('node-'+dropTargetId);if(dt)dt.classList.remove('drop-target')}
@@ -896,8 +904,8 @@ window.addEventListener('pointerup',e=>{
     const savedDragId=dragId;
     const wasMoved=dragMoved;
     isDrag=false;dragId=null;dragMoved=false;dropTargetId=null;
-    if(didReparent)renderAll(savedDragId);
-    else if(wasMoved)renderOnly(); // snap back to correct position, no re-layout
+    if(didReparent)relayout(savedDragId);
+    else if(wasMoved)render(); // snap back to correct position, no re-layout
   }
 });
 
