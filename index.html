@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -29,11 +30,9 @@
   --sh-lg: 0 8px 32px rgba(0,0,0,0.1);
 }
 *{margin:0;padding:0;box-sizing:border-box}
-/* iOS 스크롤 바운스 현상을 막기 위해 뷰포트 고정 */
 body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden;height:100vh;width:100vw;
   -webkit-user-select:none;user-select:none;touch-action:none;position:fixed}
 
-/* absolute 대신 fixed를 사용하여 화면 밖으로 스크롤되는 버그 방지 */
 #canvas{position:fixed;top:0;left:0;width:100%;height:100%;cursor:grab;
   background-image:radial-gradient(circle,var(--border) .8px,transparent .8px);background-size:28px 28px}
 #canvas.grabbing{cursor:grabbing}
@@ -244,12 +243,10 @@ svg#lines path{fill:none;stroke:var(--border-strong);stroke-width:2;stroke-linec
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="help-hint"><kbd>Tab</kbd> 자식 추가 &nbsp; <kbd>Enter</kbd> 형제 추가 &nbsp; <kbd>T</kbd> 할 일 &nbsp; <kbd>C</kbd> 접기 &nbsp; <kbd>Del</kbd> 삭제 &nbsp; <kbd>F2</kbd> 수정 &nbsp; <kbd>⌘F</kbd> 검색</div>
+<div class="help-hint"><kbd>Tab</kbd> 자식 &nbsp; <kbd>Enter</kbd> 형제 &nbsp; <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> 이동 &nbsp; <kbd>T</kbd> 할일 &nbsp; <kbd>C</kbd> 접기 &nbsp; <kbd>Del</kbd> 삭제 &nbsp; <kbd>F2</kbd> 수정</div>
 
 <script>
-// ── iOS 스크롤/바운스 전면 차단 (앱 이탈 방지) ──
 document.addEventListener('touchmove', function(e) {
-  // 사이드 패널이나 검색 결과 같은 스크롤 영역은 스크롤 허용
   if (e.target.closest('#todo-list') || e.target.closest('.search-results')) return;
   e.preventDefault();
 }, { passive: false });
@@ -291,7 +288,7 @@ function syncTodoOrder(){
 // ── Visibility ──
 function isVis(id){let c=nodes[id];while(c&&c.parent){const p=nodes[c.parent];if(!p||p.collapsed)return false;c=p}return true}
 
-// ── Hybrid Layout: Radial L1 (proportional) + Horizontal Tree L2+ ──
+// ── Hybrid Layout ──
 const BRANCH_R=180,H_MARGIN=40,V_GAP=14,NODE_H=42,MIN_BRANCH_GAP=60;
 
 function estimateW(id){
@@ -335,7 +332,6 @@ function layoutBranch(id,dir){
 }
 
 function autoLayout(anchorId){
-  // 사파리 이탈 후 뷰포트 크기가 0으로 잡히는 고질적인 버그 방어
   if (window.innerWidth === 0 || window.innerHeight === 0) return; 
 
   const root=Object.values(nodes).find(n=>n.isRoot);
@@ -438,7 +434,6 @@ function renderNode(n){
 
 function cntDesc(id){const n=nodes[id];if(!n)return 0;let c=n.children.length;n.children.forEach(ch=>c+=cntDesc(ch));return c}
 
-// ── ★ 핵심 수정사항: Lines (레이아웃 깨짐의 주원인인 getBoundingClientRect 완전 제거) ──
 function drawLines(){
   svg.innerHTML='';
   Object.values(nodes).forEach(n=>{
@@ -447,14 +442,11 @@ function drawLines(){
     const pE=document.getElementById('node-'+p.id),cE=document.getElementById('node-'+n.id);
     if(!pE||!cE)return;
     
-    // 사파리의 렌더링 지연 파이프라인 버그를 피하기 위해, 
-    // getBoundingClientRect 대신 순수 메모리상의 논리적 x, y 데이터와 offset 크기만으로 좌표를 계산합니다.
     const pW = pE.offsetWidth || estimateW(p.id);
     const pH = pE.offsetHeight || NODE_H;
     const cW = cE.offsetWidth || estimateW(n.id);
     const cH = cE.offsetHeight || NODE_H;
     
-    // 이 방식은 브라우저 렌더링 딜레이와 상관없이 무조건 100% 동기화되어 선과 노드가 일치합니다.
     const x1 = p.x + panX + pW / 2;
     const y1 = p.y + panY + pH / 2;
     const x2 = n.x + panX + cW / 2;
@@ -469,10 +461,96 @@ function drawLines(){
   });
 }
 
-// ── Selection ──
+// ── Selection & Navigation ──
 function sel(id){
   selId=id;cvs.querySelectorAll('.node').forEach(e=>e.classList.remove('selected'));
   const e=document.getElementById('node-'+id);if(e)e.classList.add('selected');
+}
+
+// 노드가 루트 기준 왼쪽에 있는지 확인하는 함수
+function isLeftNode(id) {
+  let curr = nodes[id];
+  if(!curr || curr.isRoot) return false;
+  // L1 노드(루트의 직속 자식)까지 올라감
+  while(curr.parent && !nodes[curr.parent].isRoot) {
+    curr = nodes[curr.parent];
+  }
+  const root = nodes[curr.parent];
+  return curr.x < root.x; // L1 노드의 x가 루트보다 작으면 왼쪽 가지
+}
+
+// 방향키 공간 이동 로직
+function moveSelection(dir) {
+  if(!selId) return;
+  const n = nodes[selId];
+  if(!n) return;
+
+  let targetId = null;
+
+  if (dir === 'Up' || dir === 'Down') {
+    // 위/아래 이동은 시각적인 형제 노드 탐색 (y좌표 기준)
+    if(n.parent) {
+      const p = nodes[n.parent];
+      const idx = p.children.indexOf(selId);
+      let nextIdx = dir === 'Up' ? idx - 1 : idx + 1;
+      if(nextIdx >= 0 && nextIdx < p.children.length) {
+        targetId = p.children[nextIdx];
+      }
+    }
+  } else {
+    // 좌/우 이동
+    if (n.isRoot) {
+      // 루트 노드일 경우 화면상의 위치에 맞는 자식을 찾음
+      const lefties = n.children.filter(cid => nodes[cid] && nodes[cid].x < n.x);
+      const righties = n.children.filter(cid => nodes[cid] && nodes[cid].x >= n.x);
+      if (dir === 'Left' && lefties.length > 0) targetId = lefties[Math.floor(lefties.length / 2)];
+      if (dir === 'Right' && righties.length > 0) targetId = righties[Math.floor(righties.length / 2)];
+    } else {
+      // 일반 노드일 경우 현재 노드가 왼쪽 가지인지 오른쪽 가지인지 파악
+      const isLeft = isLeftNode(selId);
+      
+      const goOutward = () => { // 바깥쪽(자식)으로 이동
+        if(n.children.length > 0 && !n.collapsed) targetId = n.children[Math.floor(n.children.length / 2)];
+        else if(n.collapsed) togColl(n.id);
+      };
+      const goInward = () => { // 안쪽(부모)으로 이동
+        if(n.parent) targetId = n.parent;
+      };
+
+      if (isLeft) {
+        // 왼쪽 가지: 왼쪽 화살표=바깥(자식), 오른쪽 화살표=안쪽(부모)
+        if (dir === 'Left') goOutward();
+        if (dir === 'Right') goInward();
+      } else {
+        // 오른쪽 가지: 왼쪽 화살표=안쪽(부모), 오른쪽 화살표=바깥(자식)
+        if (dir === 'Left') goInward();
+        if (dir === 'Right') goOutward();
+      }
+    }
+  }
+  
+  if (targetId) {
+     sel(targetId);
+     const el = document.getElementById('node-' + targetId);
+     if (el) {
+         // 화면 밖으로 나가면 카메라 부드럽게 팬 이동
+         const rect = el.getBoundingClientRect();
+         const margin = 80;
+         let outX = 0, outY = 0;
+         
+         if (rect.left < margin) outX = margin - rect.left;
+         else if (rect.right > window.innerWidth - margin) outX = window.innerWidth - margin - rect.right;
+         
+         if (rect.top < margin + 60) outY = margin + 60 - rect.top; 
+         else if (rect.bottom > window.innerHeight - margin) outY = window.innerHeight - margin - rect.bottom;
+         
+         if (outX !== 0 || outY !== 0) {
+             panX += outX;
+             panY += outY;
+             reposAll();
+         }
+     }
+  }
 }
 
 // ── Add ──
@@ -490,7 +568,13 @@ function addChildTo(pid){
   renderAll(pid);sel(id);
   setTimeout(()=>editNode(id),80);
 }
-function addSibling(){if(!selId)return;const n=nodes[selId];if(!n||n.parent)return;addChildTo(n.parent)}
+
+function addSibling(){
+  if(!selId) return;
+  const n=nodes[selId];
+  if(!n || !n.parent) return; // 루트는 형제 추가 불가
+  addChildTo(n.parent);
+}
 
 // ── Edit ──
 function editNode(id){
@@ -1009,11 +1093,19 @@ document.getElementById('search-input').addEventListener('keydown',e=>{
 
 // ── Keyboard ──
 window.addEventListener('keydown',e=>{
-  if(isEditing)return;
+  if(isEditing)return; // 편집 중에는 텍스트 이동을 위해 방향키 등을 뺏지 않음
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){e.preventDefault();toggleSearch();return}
   if(searchOpen)return;
+  
   if(e.key==='Tab'){e.preventDefault();addChild()}
   if(e.key==='Enter'){e.preventDefault();addSibling()}
+  
+  // 방향키 이동
+  if(e.key==='ArrowLeft'){e.preventDefault(); moveSelection('Left');}
+  if(e.key==='ArrowRight'){e.preventDefault(); moveSelection('Right');}
+  if(e.key==='ArrowUp'){e.preventDefault(); moveSelection('Up');}
+  if(e.key==='ArrowDown'){e.preventDefault(); moveSelection('Down');}
+  
   if(e.key==='t'||e.key==='T')toggleTodoSel();
   if(e.key==='c'||e.key==='C')toggleCollapseSel();
   if(e.key==='Delete'||e.key==='Backspace'){if(selId)delNode(selId)}
@@ -1029,3 +1121,6 @@ init();
 </script>
 </body>
 </html>
+
+
+```
