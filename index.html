@@ -287,8 +287,8 @@ function syncTodoOrder(){
 // ── Visibility ──
 function isVis(id){let c=nodes[id];while(c&&c.parent){const p=nodes[c.parent];if(!p||p.collapsed)return false;c=p}return true}
 
-// ── Hybrid Layout ──
-const BRANCH_R=180,H_MARGIN=40,V_GAP=14,NODE_H=42,MIN_BRANCH_GAP=60;
+// ── ★ 개선된 표준 투-컬럼 레이아웃 (겹침 방지) ──
+const H_MARGIN=40,V_GAP=14,NODE_H=42;
 
 function estimateW(id){
   const n=nodes[id];if(!n)return 80;
@@ -350,23 +350,40 @@ function autoLayout(anchorId){
     return;
   }
 
-  const weights=L1.map(cid=>Math.max(subtreeH(cid),MIN_BRANCH_GAP));
-  const totalWeight=weights.reduce((a,b)=>a+b,0);
-  let curAngle=-Math.PI/2;
-
-  L1.forEach((cid,i)=>{
-    const sweep=(weights[i]/totalWeight)*2*Math.PI;
-    const midAngle=curAngle+sweep/2;
-    const cn=nodes[cid];
-    const dir=Math.cos(midAngle)>=0?1:-1;
-    const cw=estimateW(cid);
-    const rx=BRANCH_R*Math.cos(midAngle);
-    const ry=BRANCH_R*Math.sin(midAngle);
-    cn.x=dir>=0?rx:rx-cw;
-    cn.y=ry-NODE_H/2;
-    layoutBranch(cid,dir);
-    curAngle+=sweep;
+  // L1 자식들을 짝수는 오른쪽, 홀수는 왼쪽으로 분배하여 탑-다운 방식으로 나열합니다.
+  const rightL1 = [];
+  const leftL1 = [];
+  L1.forEach((cid, i) => {
+    if (i % 2 === 0) rightL1.push(cid);
+    else leftL1.push(cid);
   });
+
+  const layoutSide = (list, dir) => {
+    if(!list.length) return;
+    const heights = list.map(cid => subtreeH(cid));
+    const totalH = heights.reduce((a,b)=>a+b, 0) + V_GAP * (list.length - 1);
+    
+    // 이쪽 가지 전체의 시작 Y 좌표 (위쪽)
+    let curY = root.y + (NODE_H/2) - (totalH / 2);
+
+    list.forEach((cid, i) => {
+      const cn = nodes[cid];
+      const cw = estimateW(cid);
+      
+      // X 위치 지정
+      if (dir >= 0) cn.x = root.x + rootW + H_MARGIN; 
+      else cn.x = root.x - H_MARGIN - cw;
+
+      // Y 위치 지정 (항상 위에서 아래로)
+      cn.y = curY + heights[i]/2 - NODE_H/2;
+      layoutBranch(cid, dir);
+      curY += heights[i] + V_GAP;
+    });
+  };
+
+  // 양쪽 가지 배치 실행
+  layoutSide(rightL1, 1);
+  layoutSide(leftL1, -1);
 
   if(anchor){panX=oldScreenX-anchor.x;panY=oldScreenY-anchor.y}
   else{panX=window.innerWidth/2;panY=window.innerHeight/2}
@@ -466,19 +483,17 @@ function sel(id){
   const e=document.getElementById('node-'+id);if(e)e.classList.add('selected');
 }
 
-// 노드가 루트 기준 왼쪽에 있는지 확인하는 함수
 function isLeftNode(id) {
   let curr = nodes[id];
   if(!curr || curr.isRoot) return false;
-  // L1 노드(루트의 직속 자식)까지 올라감
   while(curr.parent && !nodes[curr.parent].isRoot) {
     curr = nodes[curr.parent];
   }
   const root = nodes[curr.parent];
-  return curr.x < root.x; // L1 노드의 x가 루트보다 작으면 왼쪽 가지
+  return curr.x < root.x; 
 }
 
-// 방향키 공간 이동 로직
+// ── ★ 개선된 시각적 키보드 이동 로직 ──
 function moveSelection(dir) {
   if(!selId) return;
   const n = nodes[selId];
@@ -487,43 +502,41 @@ function moveSelection(dir) {
   let targetId = null;
 
   if (dir === 'Up' || dir === 'Down') {
-    // 위/아래 이동은 시각적인 형제 노드 탐색 (y좌표 기준)
+    // 위/아래 이동은 데이터 배열 순서가 아닌, 화면에 보이는 Y 좌표 순서로 계산
     if(n.parent) {
       const p = nodes[n.parent];
-      const idx = p.children.indexOf(selId);
+      const siblings = p.children.slice().sort((a,b) => nodes[a].y - nodes[b].y);
+      const idx = siblings.indexOf(selId);
       let nextIdx = dir === 'Up' ? idx - 1 : idx + 1;
-      if(nextIdx >= 0 && nextIdx < p.children.length) {
-        targetId = p.children[nextIdx];
+      if(nextIdx >= 0 && nextIdx < siblings.length) {
+        targetId = siblings[nextIdx];
       }
     }
   } else {
     // 좌/우 이동
     if (n.isRoot) {
-      // 루트 노드일 경우 화면상의 위치에 맞는 자식을 찾음
-      const lefties = n.children.filter(cid => nodes[cid] && nodes[cid].x < n.x);
-      const righties = n.children.filter(cid => nodes[cid] && nodes[cid].x >= n.x);
+      // 루트 노드에서는 방향에 맞는 자식들 중 화면 Y 좌표가 중간에 가까운 곳으로 이동
+      const lefties = n.children.filter(cid => nodes[cid] && nodes[cid].x < n.x).sort((a,b) => nodes[a].y - nodes[b].y);
+      const righties = n.children.filter(cid => nodes[cid] && nodes[cid].x >= n.x).sort((a,b) => nodes[a].y - nodes[b].y);
       if (dir === 'Left' && lefties.length > 0) targetId = lefties[Math.floor(lefties.length / 2)];
       if (dir === 'Right' && righties.length > 0) targetId = righties[Math.floor(righties.length / 2)];
     } else {
-      // 일반 노드일 경우 현재 노드가 왼쪽 가지인지 오른쪽 가지인지 파악
       const isLeft = isLeftNode(selId);
       
-      const goOutward = () => { // 바깥쪽(자식)으로 이동
+      const goOutward = () => { 
         if(n.children.length > 0 && !n.collapsed) targetId = n.children[Math.floor(n.children.length / 2)];
         else if(n.collapsed) togColl(n.id);
       };
-      const goInward = () => { // 안쪽(부모)으로 이동
+      const goInward = () => { 
         if(n.parent) targetId = n.parent;
       };
 
       if (isLeft) {
-        // 왼쪽 가지: 왼쪽 화살표=바깥(자식), 오른쪽 화살표=안쪽(부모)
-        if (dir === 'Left') goOutward();
-        if (dir === 'Right') goInward();
+        if (dir === 'Left') goOutward(); // 왼쪽 가지에서 왼쪽 화살표는 자식으로
+        if (dir === 'Right') goInward(); // 왼쪽 가지에서 오른쪽 화살표는 부모로
       } else {
-        // 오른쪽 가지: 왼쪽 화살표=안쪽(부모), 오른쪽 화살표=바깥(자식)
-        if (dir === 'Left') goInward();
-        if (dir === 'Right') goOutward();
+        if (dir === 'Left') goInward(); // 오른쪽 가지에서 왼쪽 화살표는 부모로
+        if (dir === 'Right') goOutward(); // 오른쪽 가지에서 오른쪽 화살표는 자식으로
       }
     }
   }
@@ -532,7 +545,7 @@ function moveSelection(dir) {
      sel(targetId);
      const el = document.getElementById('node-' + targetId);
      if (el) {
-         // 화면 밖으로 나가면 카메라 부드럽게 팬 이동
+         // 화면 밖으로 나갈 경우 부드러운 카메라 보정
          const rect = el.getBoundingClientRect();
          const margin = 80;
          let outX = 0, outY = 0;
